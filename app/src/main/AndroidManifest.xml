@@ -12,6 +12,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyAyamJago">
 
+        <!-- Activity utama saat app dibuka -->
         <activity
             android:name=".LoginActivity"
             android:exported="true">
@@ -21,10 +22,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Activity untuk membuat akun / register -->
+        <activity
+            android:name=".RegisterActivity"
+            android:exported="false" />
+
+        <!-- Activity utama setelah login -->
         <activity
             android:name=".MainActivity"
-            android:exported="false">
-        </activity>
+            android:exported="false" />
 
     </application>
 

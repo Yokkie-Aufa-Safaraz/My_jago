@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MyAyamJago</string>
+    <string name="app_name">Roaster management</string>
 
     <string name="selamat_datang">Selamat Datang</string>
     <string name="password">Password</string>

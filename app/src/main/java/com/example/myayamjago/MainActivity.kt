@@ -11,202 +11,248 @@ import com.example.myayamjago.databinding.ActivityMainBinding
 import com.github.mikephil.charting.data.BarData
 import com.github.mikephil.charting.data.BarDataSet
 import com.github.mikephil.charting.data.BarEntry
-import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
-// Model transaksi
 data class Transaksi(
     val tanggal: Int,
     val bulan: Int,
     val tahun: Int,
     val nominal: Int,
-    val jenis: String // "TABUNGAN", "PEMASUKAN", "PENGELUARAN"
+    val jenis: String
 )
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private lateinit var db: DatabaseHelper
     private val gson = Gson()
+    private val riwayatList = mutableListOf<Transaksi>()
     private lateinit var adapter: TransaksiAdapter
-    private var riwayatList = mutableListOf<Transaksi>()
+    private var modeHalaman = "TABUNGAN"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Simpan username default "admin" jika belum ada
-        val sharedPref = getSharedPreferences("DataTabungan", Context.MODE_PRIVATE)
-        if (!sharedPref.contains("USERNAME")) {
-            sharedPref.edit().putString("USERNAME", "admin").apply()
-        }
-
-        // Setup RecyclerView
+        db = DatabaseHelper(this)
         adapter = TransaksiAdapter(riwayatList, this) { loadData() }
         binding.rvRiwayat.layoutManager = LinearLayoutManager(this)
         binding.rvRiwayat.adapter = adapter
 
         loadData()
 
-        // FAB tambah catatan
         binding.fabTambah.setOnClickListener { showTambahDialog() }
 
-        // BottomNavigation
-        binding.bottomNavigation.setOnItemSelectedListener { item ->
-            when (item.itemId) {
-                R.id.nav_home -> {
-                    binding.cardGrafik.visibility = View.VISIBLE
-                    binding.tvRiwayatHarian.visibility =
-                        if (riwayatList.isEmpty()) View.VISIBLE else View.GONE
-                    true
-                }
-                R.id.nav_tambah -> {
-                    showTambahDialog()
-                    true
-                }
-                R.id.nav_profil -> {
-                    showProfilDialog()
-                    true
-                }
+        binding.bottomNavigation.setOnItemSelectedListener {
+            when (it.itemId) {
+                R.id.nav_tabungan -> { modeHalaman = "TABUNGAN"; loadData(); true }
+                R.id.nav_pemasukan -> { modeHalaman = "PEMASUKAN"; loadData(); true }
+                R.id.nav_tambah -> { showTambahDialog(); true }
+                R.id.nav_profil -> { modeHalaman = "PROFIL"; loadData(); true }
                 else -> false
             }
         }
     }
 
-    // Dialog tambah catatan
+    private fun loadData() {
+        val sharedPref = getSharedPreferences("DataTabungan", Context.MODE_PRIVATE)
+
+        // Reset semua view default
+        binding.rvRiwayat.visibility = View.VISIBLE
+        binding.barChart.visibility = View.VISIBLE
+        binding.tvTotalSaldoHome.visibility = View.VISIBLE
+        binding.fabTambah.visibility = View.VISIBLE
+
+        when (modeHalaman) {
+            "TABUNGAN" -> {
+                riwayatList.clear()
+                riwayatList.addAll(getRiwayat("RIWAYAT_TABUNGAN"))
+                binding.tvTotalSaldoHome.text = "Saldo Tabungan: Rp ${sharedPref.getInt("TOTAL_TABUNGAN",0)}"
+            }
+            "PEMASUKAN" -> {
+                riwayatList.clear()
+                riwayatList.addAll(getRiwayat("RIWAYAT_PEMASUKAN"))
+                riwayatList.addAll(getRiwayat("RIWAYAT_PENGELUARAN"))
+                binding.tvTotalSaldoHome.text = "Saldo Pemasukan: Rp ${sharedPref.getInt("TOTAL_PEMASUKAN",0)}"
+            }
+            "PENGELUARAN" -> {
+                riwayatList.clear()
+                riwayatList.addAll(getRiwayat("RIWAYAT_PENGELUARAN"))
+                binding.tvTotalSaldoHome.text = "Riwayat Pengeluaran"
+            }
+            "PROFIL" -> {
+                // Hide semua view transaksi
+                binding.rvRiwayat.visibility = View.GONE
+                binding.barChart.visibility = View.GONE
+                binding.tvTotalSaldoHome.visibility = View.GONE
+                binding.fabTambah.visibility = View.GONE
+
+                // Inflasi layout profil ke dalam root
+                val profilLayout = layoutInflater.inflate(R.layout.layout_profil, null)
+                profilLayout.layoutParams = binding.root.layoutParams
+
+                binding.root.removeAllViews()
+                binding.root.addView(profilLayout)
+
+                // Ambil data akun dari SQLite
+                val akun = db.getUser()
+
+                profilLayout.findViewById<TextView>(R.id.tvNamaProfil).text = akun?.first ?: "Tidak ada akun"
+                profilLayout.findViewById<TextView>(R.id.tvEmailProfil).text = akun?.second ?: "-"
+
+                // Tombol reset data
+                profilLayout.findViewById<Button>(R.id.btnResetData).setOnClickListener {
+                    resetData()
+                    modeHalaman = "TABUNGAN"
+                    loadData()
+                }
+
+                // Tombol keluar
+                profilLayout.findViewById<LinearLayout>(R.id.menuKeluar).setOnClickListener {
+                    finishAffinity()
+                }
+
+                return
+            }
+        }
+
+        adapter.notifyDataSetChanged()
+        setupGrafik()
+    }
+
+    private fun getRiwayat(key: String): MutableList<Transaksi> {
+        val sharedPref = getSharedPreferences("DataTabungan", Context.MODE_PRIVATE)
+        val json = sharedPref.getString(key, "[]")
+        val type = object : TypeToken<MutableList<Transaksi>>() {}.type
+        return gson.fromJson(json, type)
+    }
+
+    private fun setupGrafik() {
+        if (modeHalaman == "PEMASUKAN") {
+            val entriesPemasukan = ArrayList<BarEntry>()
+            val entriesPengeluaran = ArrayList<BarEntry>()
+
+            getRiwayat("RIWAYAT_PEMASUKAN").forEachIndexed { idx, t ->
+                entriesPemasukan.add(BarEntry((idx + 1).toFloat(), t.nominal.toFloat()))
+            }
+            getRiwayat("RIWAYAT_PENGELUARAN").forEachIndexed { idx, t ->
+                entriesPengeluaran.add(BarEntry((idx + 1).toFloat(), t.nominal.toFloat()))
+            }
+
+            val ds1 = BarDataSet(entriesPemasukan, "Pemasukan")
+            ds1.color = Color.BLUE
+            val ds2 = BarDataSet(entriesPengeluaran, "Pengeluaran")
+            ds2.color = Color.RED
+
+            binding.barChart.data = BarData(ds1, ds2)
+        } else if (modeHalaman != "PROFIL") {
+            val entries = ArrayList<BarEntry>()
+            riwayatList.forEachIndexed { idx, t ->
+                entries.add(BarEntry((idx + 1).toFloat(), t.nominal.toFloat()))
+            }
+            val ds = BarDataSet(entries, modeHalaman)
+            ds.color = if (modeHalaman == "TABUNGAN") Color.GREEN else Color.GRAY
+            binding.barChart.data = BarData(ds)
+        }
+
+        binding.barChart.description.isEnabled = false
+        binding.barChart.invalidate()
+    }
+
     private fun showTambahDialog() {
-        val dialog = BottomSheetDialog(this)
+        val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
         val view = layoutInflater.inflate(R.layout.layout_input_tabungan, null)
         dialog.setContentView(view)
 
-        val rgJenis = view.findViewById<RadioGroup>(R.id.rgJenisCatatan)
         val etTanggal = view.findViewById<EditText>(R.id.etTanggal)
         val etBulan = view.findViewById<EditText>(R.id.etBulan)
         val etTahun = view.findViewById<EditText>(R.id.etTahun)
         val etNominal = view.findViewById<EditText>(R.id.etNominal)
+        val spJenis = view.findViewById<Spinner>(R.id.spinnerJenis)
         val btnSimpan = view.findViewById<Button>(R.id.btnSimpan)
 
-        btnSimpan.setOnClickListener {
-            val tanggalStr = etTanggal.text.toString()
-            val bulanStr = etBulan.text.toString()
-            val tahunStr = etTahun.text.toString()
-            val nominalStr = etNominal.text.toString()
-            val selectedId = rgJenis.checkedRadioButtonId
+        val jenisList = arrayOf("TABUNGAN", "PEMASUKAN", "PENGELUARAN")
+        val adapterSpinner = ArrayAdapter(this, android.R.layout.simple_spinner_item, jenisList)
+        adapterSpinner.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spJenis.adapter = adapterSpinner
 
-            if (tanggalStr.isEmpty() || bulanStr.isEmpty() || tahunStr.isEmpty() ||
-                nominalStr.isEmpty() || selectedId == -1
-            ) {
-                Toast.makeText(this, "Lengkapi semua data!", Toast.LENGTH_SHORT).show()
+        btnSimpan.setOnClickListener {
+            if (etTanggal.text.isEmpty() || etBulan.text.isEmpty() || etTahun.text.isEmpty() || etNominal.text.isEmpty()) {
+                Toast.makeText(this, "Lengkapi data", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            val tanggal = tanggalStr.toInt()
-            val bulan = bulanStr.toInt()
-            val tahun = tahunStr.toInt()
-            val nominal = nominalStr.toInt()
-            val jenis = when (selectedId) {
-                R.id.rbTabungan -> "TABUNGAN"
-                R.id.rbPemasukan -> "PEMASUKAN"
-                R.id.rbPengeluaran -> "PENGELUARAN"
-                else -> ""
-            }
-
+            val nominal = etNominal.text.toString().toInt()
+            val jenis = spJenis.selectedItem.toString()
             val sharedPref = getSharedPreferences("DataTabungan", Context.MODE_PRIVATE)
-            val editor = sharedPref.edit()
 
-            // Update total saldo
-            var totalSaldo = sharedPref.getInt("TOTAL_SALDO", 0)
-            totalSaldo = when (jenis) {
-                "TABUNGAN", "PEMASUKAN" -> totalSaldo + nominal
-                "PENGELUARAN" -> totalSaldo - nominal
-                else -> totalSaldo
+            when (jenis) {
+                "TABUNGAN" -> {
+                    val total = sharedPref.getInt("TOTAL_TABUNGAN", 0) + nominal
+                    val list = getRiwayat("RIWAYAT_TABUNGAN")
+                    list.add(Transaksi(
+                        etTanggal.text.toString().toInt(),
+                        etBulan.text.toString().toInt(),
+                        etTahun.text.toString().toInt(),
+                        nominal,
+                        "TABUNGAN"
+                    ))
+                    sharedPref.edit()
+                        .putInt("TOTAL_TABUNGAN", total)
+                        .putString("RIWAYAT_TABUNGAN", gson.toJson(list))
+                        .apply()
+                }
+                "PEMASUKAN" -> {
+                    val total = sharedPref.getInt("TOTAL_PEMASUKAN", 0) + nominal
+                    val list = getRiwayat("RIWAYAT_PEMASUKAN")
+                    list.add(Transaksi(
+                        etTanggal.text.toString().toInt(),
+                        etBulan.text.toString().toInt(),
+                        etTahun.text.toString().toInt(),
+                        nominal,
+                        "PEMASUKAN"
+                    ))
+                    sharedPref.edit()
+                        .putInt("TOTAL_PEMASUKAN", total)
+                        .putString("RIWAYAT_PEMASUKAN", gson.toJson(list))
+                        .apply()
+                }
+                "PENGELUARAN" -> {
+                    val total = sharedPref.getInt("TOTAL_PEMASUKAN", 0) - nominal
+                    if (total < 0) {
+                        Toast.makeText(this, "Saldo pemasukan tidak cukup", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    val list = getRiwayat("RIWAYAT_PENGELUARAN")
+                    list.add(Transaksi(
+                        etTanggal.text.toString().toInt(),
+                        etBulan.text.toString().toInt(),
+                        etTahun.text.toString().toInt(),
+                        nominal,
+                        "PENGELUARAN"
+                    ))
+                    sharedPref.edit()
+                        .putInt("TOTAL_PEMASUKAN", total)
+                        .putString("RIWAYAT_PENGELUARAN", gson.toJson(list))
+                        .apply()
+                }
             }
-            editor.putInt("TOTAL_SALDO", totalSaldo)
-
-            // Simpan riwayat transaksi
-            val historyJson = sharedPref.getString("RIWAYAT", "[]") ?: "[]"
-            val type = object : TypeToken<MutableList<Transaksi>>() {}.type
-            val riwayat: MutableList<Transaksi> = gson.fromJson(historyJson, type)
-            riwayat.add(Transaksi(tanggal, bulan, tahun, nominal, jenis))
-            editor.putString("RIWAYAT", gson.toJson(riwayat))
-            editor.apply()
 
             loadData()
             dialog.dismiss()
-            Toast.makeText(this, "Data berhasil disimpan!", Toast.LENGTH_SHORT).show()
         }
 
         dialog.show()
     }
 
-    // Load data riwayat dan saldo
-    private fun loadData() {
+    private fun resetData() {
         val sharedPref = getSharedPreferences("DataTabungan", Context.MODE_PRIVATE)
-
-        // Load riwayat transaksi
-        val historyJson = sharedPref.getString("RIWAYAT", "[]") ?: "[]"
-        val type = object : TypeToken<MutableList<Transaksi>>() {}.type
-        riwayatList.clear()
-        riwayatList.addAll(gson.fromJson(historyJson, type))
-
-        // Jika riwayat kosong, reset saldo ke 0
-        if (riwayatList.isEmpty()) {
-            val editor = sharedPref.edit()
-            editor.putInt("TOTAL_SALDO", 0)
-            editor.apply()
-        }
-
-        // Update tampilan saldo
-        val total = sharedPref.getInt("TOTAL_SALDO", 0)
-        binding.tvTotalSaldoHome.text = "Rp $total"
-
-        adapter.notifyDataSetChanged()
-        binding.tvRiwayatHarian.visibility =
-            if (riwayatList.isEmpty()) View.VISIBLE else View.GONE
-
-        setupGrafik()
-    }
-
-    // Setup grafik batang
-    private fun setupGrafik() {
-        val entries = ArrayList<BarEntry>()
-        val colors = ArrayList<Int>()
-        riwayatList.forEachIndexed { index, transaksi ->
-            entries.add(BarEntry((index + 1).toFloat(), transaksi.nominal.toFloat()))
-            val color = when (transaksi.jenis) {
-                "TABUNGAN" -> Color.GREEN
-                "PEMASUKAN" -> Color.BLUE
-                "PENGELUARAN" -> Color.RED
-                else -> Color.GRAY
-            }
-            colors.add(color)
-        }
-        val dataSet = BarDataSet(entries, "Transaksi")
-        dataSet.colors = colors
-        binding.barChart.data = BarData(dataSet)
-        binding.barChart.description.isEnabled = false
-        binding.barChart.animateY(1000)
-        binding.barChart.invalidate()
-    }
-
-    // Dialog Profil dengan username dan tombol keluar
-    private fun showProfilDialog() {
-        val dialog = BottomSheetDialog(this)
-        val view = layoutInflater.inflate(R.layout.layout_profil, null)
-        dialog.setContentView(view)
-
-        // Ambil username dari SharedPreferences
-        val sharedPref = getSharedPreferences("DataTabungan", Context.MODE_PRIVATE)
-        val username = sharedPref.getString("USERNAME", "Pengguna")
-        val tvUsername = view.findViewById<TextView>(R.id.tvUsername)
-        tvUsername.text = username
-
-        val btnKeluar = view.findViewById<Button>(R.id.btnKeluar)
-        btnKeluar.setOnClickListener {
-            finishAffinity() // keluar aplikasi
-        }
-
-        dialog.show()
+        sharedPref.edit().clear().apply()
+        db.hapusSemuaAkun()
+        Toast.makeText(this, "Semua data berhasil dihapus", Toast.LENGTH_SHORT).show()
+        modeHalaman = "TABUNGAN"
+        loadData()
     }
 }

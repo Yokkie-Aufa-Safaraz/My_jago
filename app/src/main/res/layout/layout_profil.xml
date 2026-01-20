@@ -1,34 +1,88 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="vertical"
-    android:padding="24dp"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
 
-    <!-- Judul Profil -->
-
-    <!-- Username -->
-    <TextView
+    <!-- HEADER PROFIL -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingBottom="16dp"
-        android:text="Profil Pengguna"
-        android:textSize="18sp"
-        android:textStyle="bold" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
 
-    <TextView
-        android:id="@+id/tvUsername"
+        <ImageView
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:src="@android:drawable/ic_menu_myplaces"
+            android:background="@android:color/darker_gray"
+            android:padding="10dp"/>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginStart="16dp">
+
+            <TextView
+                android:id="@+id/tvNamaProfil"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Admin"
+                android:textSize="18sp"
+                android:textStyle="bold"/>
+
+            <TextView
+                android:id="@+id/tvEmailProfil"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="admin@gmail.com"
+                android:textSize="14sp"
+                android:textColor="#666666"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- GARIS -->
+    <View
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Nama Pengguna"
-        android:textSize="16sp"
-        android:paddingBottom="24dp"/>
+        android:layout_height="1dp"
+        android:background="#DDDDDD"
+        android:layout_marginVertical="16dp"/>
 
-    <!-- Tombol Keluar -->
+    <!-- HAPUS SEMUA DATA -->
     <Button
-        android:id="@+id/btnKeluar"
+        android:id="@+id/btnResetData"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Keluar Aplikasi"/>
+        android:text="Hapus Semua Data"
+        android:textColor="#FFFFFF"
+        android:backgroundTint="#D32F2F"
+        android:layout_marginTop="12dp"
+        android:padding="12dp"/>
+
+    <!-- KELUAR -->
+    <LinearLayout
+        android:id="@+id/menuKeluar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:layout_marginTop="8dp"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true">
+
+
+
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Keluar"
+            android:textSize="16sp"/>
+    </LinearLayout>
+
 </LinearLayout>

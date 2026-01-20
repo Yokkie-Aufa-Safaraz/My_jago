@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Home -->
+    <!-- Tabungan (Home) -->
     <item
-        android:id="@+id/nav_home"
-        android:icon="@android:drawable/ic_menu_today"
-        android:title="Home" />
+        android:id="@+id/nav_tabungan"
+        android:icon="@android:drawable/ic_menu_save"
+        android:title="Tabungan" />
 
     <!-- Tambah transaksi -->
     <item
@@ -13,10 +13,16 @@
         android:icon="@android:drawable/ic_menu_add"
         android:title="Tambah" />
 
-    <!-- Profil / Keluar -->
+    <!-- Pemasukan -->
+    <item
+        android:id="@+id/nav_pemasukan"
+        android:icon="@android:drawable/ic_menu_upload"
+        android:title="Pemasukan" />
+
+    <!-- Profil -->
     <item
         android:id="@+id/nav_profil"
-        android:icon="@android:drawable/ic_menu_manage"
+        android:icon="@android:drawable/ic_menu_myplaces"
         android:title="Profil" />
 
 </menu>
